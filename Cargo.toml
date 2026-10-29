@@ -1,0 +1,27 @@
+[package]
+name = "peer-channel"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+description = "Sans-IO secure channel for local-first apps: key schedule, Noise IKpsk1 handshake and framing"
+publish = false
+
+[dependencies]
+# Only the primitives the suite needs. Not "std": in snow 0.10 it also turns on ring, which does not
+# build for wasm32-unknown-unknown (secure-share PR #27).
+snow = { version = "=0.10.0", default-features = false, features = ["default-resolver", "use-curve25519", "use-chacha20poly1305", "use-sha2", "use-getrandom"] }
+hkdf = "0.12"
+hmac = "0.12"
+sha2 = "0.10"
+chacha20poly1305 = { version = "0.10", default-features = false, features = ["alloc"] }
+getrandom = "0.3"
+zeroize = { version = "1", features = ["derive"] }
+thiserror = "2"
+
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
+getrandom = { version = "0.3", features = ["wasm_js"] }
+
+[dev-dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+hex = "0.4"

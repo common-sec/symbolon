@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    # rustup comes with the runner image, so no third-party toolchain action is needed.
+    - name: Set up Rust
+      run: |
+        rustup toolchain install stable --profile minimal --component clippy,rustfmt
+        rustup target add wasm32-unknown-unknown aarch64-apple-ios aarch64-linux-android
+
+    - name: Format
+      run: cargo fmt --check
+
+    - name: Lint
+      run: cargo clippy --locked --all-targets -- -D warnings
+
+    - name: Test
+      run: cargo test --locked
+
+    # Compile-only checks that the crate still builds for every platform the apps ship on.
+    - name: Build for WebAssembly, iOS and Android
+      run: |
+        cargo build --locked --release --target wasm32-unknown-unknown
+        cargo check --locked --release --target aarch64-apple-ios
+        cargo check --locked --release --target aarch64-linux-android
