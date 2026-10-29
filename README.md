@@ -1,4 +1,8 @@
-# peer-channel
+# Symbolon
+
+In ancient Greece a *symbolon* was a token broken in two: each side kept a half, and whoever later
+fitted the halves together proved who they were. This library does the same for devices: one shared
+secret, and a handshake that proves each side holds it.
 
 A small, sans-IO secure channel for local-first apps that connect their users' devices directly.
 It is shared by [CommonSec Share](https://github.com/common-sec/secure-share) (browser, through

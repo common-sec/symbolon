@@ -1,7 +1,7 @@
 //! One shared secret gives every key, each bound to the app and to its purpose:
 //!
 //! ```text
-//! secret --HKDF(salt = "peer-channel/v1" || context)--> signaling  (password for signalling strategies)
+//! secret --HKDF(salt = "symbolon/v1" || context)--> signaling  (password for signalling strategies)
 //!                                                   --> seal       (XChaCha20-Poly1305, see `seal`)
 //!                                                   --> topic      (HMAC key that names relay topics)
 //!                                                   --> noise-psk  (Noise pre-shared key)
@@ -21,7 +21,7 @@ use crate::{Error, Result};
 pub const KEY_LEN: usize = 32;
 /// Shorter secrets would make the derived keys guessable.
 pub const MIN_SECRET_LEN: usize = 32;
-const SALT_PREFIX: &[u8] = b"peer-channel/v1";
+const SALT_PREFIX: &[u8] = b"symbolon/v1";
 
 pub type Key = Zeroizing<[u8; KEY_LEN]>;
 
