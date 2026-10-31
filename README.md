@@ -83,4 +83,5 @@ cargo build --release --target wasm32-unknown-unknown   # needs .cargo/config.to
 
 ## License
 
-Not chosen yet.
+Licensed under the [Apache License, Version 2.0](LICENSE). See [NOTICE](NOTICE) for the attribution that
+copies and forks must keep. The license does not grant rights to the common-sec name or logos.
