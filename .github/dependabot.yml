@@ -1,4 +1,4 @@
-# New releases are only proposed once they have been public for a week, as in secure-share.
+# New releases are only proposed once they have been public for a week.
 # Security updates are not delayed by the cooldown.
 version: 2
 

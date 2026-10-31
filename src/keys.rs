@@ -8,7 +8,7 @@
 //!                                                   --> fingerprint (short code people compare)
 //! ```
 //!
-//! `context` separates apps and rooms, for example `b"bringmeback/v1"` or `b"secure-share/v3/<room>"`,
+//! `context` separates apps and rooms, for example `b"my-app/v1"` or `b"my-app/v1/<room id>"`,
 //! so the same secret never gives the same keys in two places.
 
 use hkdf::Hkdf;

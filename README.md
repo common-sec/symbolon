@@ -5,12 +5,10 @@ fitted the halves together proved who they were. This library does the same for 
 secret, and a handshake that proves each side holds it.
 
 A small, sans-IO secure channel for local-first apps that connect their users' devices directly.
-It is shared by [CommonSec Share](https://github.com/common-sec/secure-share) (browser, through
-WebAssembly) and [bringmeback](https://github.com/gum0x/bringmeback) (Flutter, through
-flutter_rust_bridge), and meant to be reusable by other privacy-focused apps.
+It is written in Rust and built for native platforms, Flutter (through flutter_rust_bridge) and the
+browser (through WebAssembly).
 
-**Status: 0.x, not reviewed.** Don't rely on it until the external review planned before
-secure-share 1.0.
+**Status: 0.x, not reviewed.** Don't rely on it until it has had an external security review.
 
 ## What it does
 
@@ -28,24 +26,24 @@ at least 32 bytes that are uniformly random, or the output of a password hash. `
 the protocol version and, where there are rooms, the room, so the same secret never gives the same keys
 in two places.
 
-| App | `context` | `secret` |
+| Your app shares | `context` | `secret` |
 | --- | --- | --- |
-| bringmeback | `b"bringmeback/v1"` | the 32-byte group secret from the pairing code |
-| secure-share | `b"secure-share/v3/<room id>"` | link secret (32 bytes) followed by PBKDF2-SHA256(passphrase, 600k iterations), 64 bytes |
+| A random secret, e.g. from a QR pairing code | `b"my-app/v1"` | the 32 random bytes |
+| A link secret plus a passphrase | `b"my-app/v1/<room id>"` | the link secret (32 bytes) followed by a password hash of the passphrase (PBKDF2-SHA256 with at least 600k iterations, or Argon2id), salted with the room id |
 
-A passphrase alone must never be passed as `secret`: hash it first, as secure-share does.
+A passphrase alone must never be passed as `secret`: hash it first.
 
 ## Using it
 
 ```rust
 use symbolon::{handshake::{initiates, Handshake, StaticKeypair}, keys::{KeySchedule, Purpose}, seal::Sealer};
 
-let keys = KeySchedule::new(b"bringmeback/v1", &group_secret)?;
+let keys = KeySchedule::new(b"my-app/v1", &group_secret)?;
 let topic = keys.topic(b"signal");              // where to meet on the relay
 let sealer = Sealer::new(&keys);                // seal / open offers and answers
 let me = StaticKeypair::from_private(&stored_device_key)?;
 let psk = keys.derive(Purpose::NoisePsk);
-let prologue = [b"bringmeback/v1|".as_slice(), &topic].concat();
+let prologue = [b"my-app/v1|".as_slice(), &topic].concat();
 
 // Once a data channel is open, the device with the lower public key starts:
 let mut hs = if initiates(me.public(), &peer_public) {
@@ -68,7 +66,7 @@ on every platform. Everything decrypted from a peer is still untrusted input for
 ## Design notes
 
 - **Why IKpsk1:** with psk2 (WireGuard's choice) the responder answers before checking the PSK, which
-  lets anyone with a link test passphrase guesses offline. See secure-share PR #27.
+  lets anyone who knows the responder's key but not the passphrase test guesses offline from its reply.
 - **Why ChaChaPoly:** WebAssembly has no AES instructions; ChaCha20 was about 5× faster there.
 - **Who initiates:** when both devices know each other's static key, the lower public key initiates
   (`handshake::initiates`).

@@ -1,11 +1,11 @@
-//! `Noise_IKpsk1_25519_ChaChaPoly_SHA256`, the suite secure-share chose in its 0.9.0 study.
+//! `Noise_IKpsk1_25519_ChaChaPoly_SHA256`.
 //!
 //! - **IK:** the initiator already knows the responder's static key (from a link, or from the
 //!   responder's sealed announcement on the relay), so the handshake is one round trip and the
 //!   initiator's identity is encrypted.
 //! - **psk1:** the pre-shared key is mixed into the first message, so a responder rejects anyone
 //!   without the secret before it answers. With psk2 the responder would answer first, which lets a
-//!   caller who knows only the link test passphrase guesses offline (secure-share PR #27).
+//!   caller who knows the responder's key but not the passphrase test guesses offline from its reply.
 //! - **ChaChaPoly:** fast without AES instructions, which WebAssembly lacks.
 //!
 //! The prologue must hold what both sides agree on before the handshake (app context, protocol
