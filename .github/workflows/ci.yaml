@@ -24,13 +24,13 @@ jobs:
         rustup target add wasm32-unknown-unknown aarch64-apple-ios aarch64-linux-android
 
     - name: Format
-      run: cargo fmt --check
+      run: cargo fmt --all --check
 
     - name: Lint
-      run: cargo clippy --locked --all-targets -- -D warnings
+      run: cargo clippy --locked --workspace --all-targets -- -D warnings
 
     - name: Test
-      run: cargo test --locked
+      run: cargo test --locked --workspace
 
     # Compile-only checks that the crate still builds for every platform the apps ship on.
     - name: Build for WebAssembly, iOS and Android
@@ -38,3 +38,38 @@ jobs:
         cargo build --locked --release --target wasm32-unknown-unknown
         cargo check --locked --release --target aarch64-apple-ios
         cargo check --locked --release --target aarch64-linux-android
+
+  javascript:
+    name: JavaScript binding
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Must match the wasm-bindgen version pinned in wasm/Cargo.toml.
+      WASM_BINDGEN_VERSION: 0.2.129
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    - name: Set up Rust
+      run: |
+        rustup toolchain install stable --profile minimal
+        rustup target add wasm32-unknown-unknown
+        cargo install wasm-bindgen-cli --version "$WASM_BINDGEN_VERSION" --locked
+
+    - name: Build
+      run: |
+        cargo build --locked --release -p symbolon-wasm --target wasm32-unknown-unknown
+        wasm=target/wasm32-unknown-unknown/release/symbolon_wasm.wasm
+        wasm-bindgen --target web --out-dir wasm/pkg "$wasm"
+        wasm-bindgen --target nodejs --out-dir wasm/pkg-node "$wasm"
+
+    - name: Test in Node
+      run: node --test wasm/tests/binding.test.mjs
+
+    # The browser build, for apps to download from the run.
+    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: symbolon-wasm
+        path: wasm/pkg/
+        if-no-files-found: error

@@ -1,0 +1,15 @@
+[package]
+name = "symbolon-wasm"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+description = "JavaScript binding of Symbolon for browsers, through wasm-bindgen"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+symbolon = { path = ".." }
+# The wasm-bindgen CLI that generates the JavaScript must be this exact version.
+wasm-bindgen = "=0.2.129"
