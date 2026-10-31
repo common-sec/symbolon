@@ -1,0 +1,35 @@
+/* tslint:disable */
+/* eslint-disable */
+export const memory: WebAssembly.Memory;
+export const __wbg_channel_free: (a: number, b: number) => void;
+export const __wbg_devicekey_free: (a: number, b: number) => void;
+export const __wbg_groupkeys_free: (a: number, b: number) => void;
+export const __wbg_handshake_free: (a: number, b: number) => void;
+export const channel_decrypt: (a: number, b: number, c: number) => [number, number, number, number];
+export const channel_encrypt: (a: number, b: number, c: number) => [number, number, number, number];
+export const channel_isOpen: (a: number) => number;
+export const channel_maxPlaintext: () => number;
+export const devicekey_fromPrivate: (a: number, b: number) => [number, number, number];
+export const devicekey_generate: () => [number, number, number];
+export const devicekey_privateKey: (a: number) => [number, number];
+export const devicekey_publicKey: (a: number) => [number, number];
+export const groupkeys_fingerprint: (a: number) => [number, number];
+export const groupkeys_new: (a: number, b: number, c: number, d: number) => [number, number, number];
+export const groupkeys_open: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
+export const groupkeys_seal: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
+export const groupkeys_topic: (a: number, b: number, c: number) => [number, number];
+export const handshake_initiator: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+export const handshake_intoChannel: (a: number) => [number, number, number];
+export const handshake_isFinished: (a: number) => number;
+export const handshake_readMessage: (a: number, b: number, c: number) => [number, number, number, number];
+export const handshake_remoteStatic: (a: number) => [number, number];
+export const handshake_responder: (a: number, b: number, c: number, d: number) => [number, number, number];
+export const handshake_writeMessage: (a: number, b: number, c: number) => [number, number, number, number];
+export const initiates: (a: number, b: number, c: number, d: number) => [number, number, number];
+export const __wbindgen_exn_store: (a: number) => void;
+export const __externref_table_alloc: () => number;
+export const __wbindgen_externrefs: WebAssembly.Table;
+export const __wbindgen_malloc: (a: number, b: number) => number;
+export const __externref_table_dealloc: (a: number) => void;
+export const __wbindgen_free: (a: number, b: number, c: number) => void;
+export const __wbindgen_start: () => void;
