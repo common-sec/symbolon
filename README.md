@@ -21,6 +21,44 @@ secure-share 1.0.
 | `handshake` | `Noise_IKpsk1_25519_ChaChaPoly_SHA256` on [snow](https://github.com/mcginty/snow). Mutual authentication, forward secrecy, and a responder that rejects anyone without the secret before answering. |
 | `channel` | The transport after the handshake, with size limits and rekeying. Needs an ordered, reliable transport; any lost, reordered, replayed or altered message closes it. |
 
+## Choosing the secret
+
+`KeySchedule::new(context, secret)` does not stretch its input, so `secret` must already be hard to guess:
+at least 32 bytes that are uniformly random, or the output of a password hash. `context` names the app,
+the protocol version and, where there are rooms, the room, so the same secret never gives the same keys
+in two places.
+
+| App | `context` | `secret` |
+| --- | --- | --- |
+| bringmeback | `b"bringmeback/v1"` | the 32-byte group secret from the pairing code |
+| secure-share | `b"secure-share/v3/<room id>"` | link secret (32 bytes) followed by PBKDF2-SHA256(passphrase, 600k iterations), 64 bytes |
+
+A passphrase alone must never be passed as `secret`: hash it first, as secure-share does.
+
+## Using it
+
+```rust
+use symbolon::{handshake::{initiates, Handshake, StaticKeypair}, keys::{KeySchedule, Purpose}, seal::Sealer};
+
+let keys = KeySchedule::new(b"bringmeback/v1", &group_secret)?;
+let topic = keys.topic(b"signal");              // where to meet on the relay
+let sealer = Sealer::new(&keys);                // seal / open offers and answers
+let me = StaticKeypair::from_private(&stored_device_key)?;
+let psk = keys.derive(Purpose::NoisePsk);
+let prologue = [b"bringmeback/v1|".as_slice(), &topic].concat();
+
+// Once a data channel is open, the device with the lower public key starts:
+let mut hs = if initiates(me.public(), &peer_public) {
+    Handshake::initiator(&me, &peer_public, &psk, &prologue)?
+} else {
+    Handshake::responder(&me, &psk, &prologue)?
+};
+// initiator: send hs.write_message(b"")?, then hs.read_message(&reply)?
+// responder: hs.read_message(&first)?, check hs.remote_static() is a known device, send hs.write_message(b"")?
+let mut channel = hs.into_channel()?;
+let wire = channel.encrypt(b"changes")?;        // send; the peer calls channel.decrypt(&wire)?
+```
+
 ## What it doesn't do
 
 No sockets, no WebRTC and no relay client. Each app moves the bytes over its own transport and feeds
