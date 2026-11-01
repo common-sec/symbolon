@@ -57,6 +57,27 @@ let mut channel = hs.into_channel()?;
 let wire = channel.encrypt(b"changes")?;        // send; the peer calls channel.decrypt(&wire)?
 ```
 
+### From JavaScript
+
+`wasm/` is a binding for browsers and Node, made with wasm-bindgen. It has the same objects, takes and
+returns `Uint8Array`, and throws a JS `Error` on any failure. It runs on one thread, so the page needs no
+special server headers. The group keys stay inside wasm memory.
+
+```js
+import init, { GroupKeys, DeviceKey, Handshake, initiates } from './symbolon_wasm.js';
+await init();
+
+const keys = new GroupKeys(new TextEncoder().encode('my-app/v1'), groupSecret);
+const me = DeviceKey.fromPrivate(storedDeviceKey);
+const hs = initiates(me.publicKey, peerPublic)
+  ? Handshake.initiator(me, peerPublic, keys, prologue)
+  : Handshake.responder(me, keys, prologue);
+// ...exchange hs.writeMessage() / hs.readMessage() as above, then:
+const channel = hs.intoChannel();
+```
+
+CI builds it on every push and uploads the browser files (`symbolon-wasm`) with the run.
+
 ## What it doesn't do
 
 No sockets, no WebRTC and no relay client. Each app moves the bytes over its own transport and feeds
@@ -76,9 +97,16 @@ on every platform. Everything decrypted from a peer is still untrusted input for
 ## Develop
 
 ```sh
-cargo test
-cargo clippy --all-targets -- -D warnings
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
 cargo build --release --target wasm32-unknown-unknown   # needs .cargo/config.toml (getrandom backend)
+
+# The JavaScript binding. The wasm-bindgen CLI must match the version in wasm/Cargo.toml.
+cargo install wasm-bindgen-cli --version 0.2.129 --locked
+cargo build --release -p symbolon-wasm --target wasm32-unknown-unknown
+wasm-bindgen --target web --out-dir wasm/pkg target/wasm32-unknown-unknown/release/symbolon_wasm.wasm
+wasm-bindgen --target nodejs --out-dir wasm/pkg-node target/wasm32-unknown-unknown/release/symbolon_wasm.wasm
+node --test wasm/tests/binding.test.mjs
 ```
 
 ## License
