@@ -20,3 +20,27 @@ updates:
       default-days: 7
     commit-message:
       prefix: "deps(actions)"
+
+  # The Flutter binding. flutter_rust_bridge is left alone: the Dart package, the crate and the
+  # generated code have to move to a new version together.
+  - package-ecosystem: cargo
+    directory: /flutter/rust
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "deps(cargo)"
+    ignore:
+      - dependency-name: flutter_rust_bridge
+
+  - package-ecosystem: pub
+    directory: /flutter
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "deps(pub)"
+    ignore:
+      - dependency-name: flutter_rust_bridge

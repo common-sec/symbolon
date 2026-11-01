@@ -1,0 +1,20 @@
+[package]
+name = "symbolon_flutter"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+description = "flutter_rust_bridge binding of Symbolon, built into the symbolon_flutter Dart package"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+symbolon = { path = "../.." }
+anyhow = "1"
+# Must match the flutter_rust_bridge version in ../pubspec.yaml and the codegen that made src/frb_generated.rs.
+flutter_rust_bridge = "=2.13.0"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
