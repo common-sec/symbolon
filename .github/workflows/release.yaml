@@ -151,7 +151,7 @@ jobs:
     - name: Package
       run: |
         name="symbolon-web-${GITHUB_REF_NAME}.tar.gz"
-        tar -C dist --sort=name --owner=0 --group=0 --numeric-owner --mtime='@0' -czf "$name" symbolon
+        tar -C dist --sort=name --owner=0 --group=0 --numeric-owner --mtime='@0' -cf - symbolon | gzip -n > "$name"
         sha256sum "$name" > "$name.sha256"
         cat "$name.sha256"
 
