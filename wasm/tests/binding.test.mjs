@@ -56,3 +56,12 @@ test('a device from another group is rejected', () => {
   assert.throws(() => connect(DeviceKey.generate(), DeviceKey.generate(),
     new GroupKeys(context, secret), other));
 });
+
+test('refuses anything that is not a Uint8Array', () => {
+  // A string or plain array would otherwise be turned into other bytes without an error.
+  for (const bad of ['a'.repeat(32), Array(32).fill(1), new Uint16Array(32), 5, null, undefined]) {
+    assert.throws(() => new GroupKeys(context, bad), /Uint8Array/, String(bad));
+  }
+  assert.throws(() => DeviceKey.fromPrivate('x'.repeat(32)), /Uint8Array/);
+  assert.throws(() => initiates(new Uint8Array(32), new Uint8Array(31)), /32-byte/);
+});

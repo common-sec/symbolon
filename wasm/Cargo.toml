@@ -13,3 +13,5 @@ crate-type = ["cdylib", "rlib"]
 symbolon = { path = ".." }
 # The wasm-bindgen CLI that generates the JavaScript must be this exact version.
 wasm-bindgen = "=0.2.129"
+js-sys = "0.3"
+zeroize = "1"
