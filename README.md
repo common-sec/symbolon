@@ -78,6 +78,12 @@ const channel = hs.intoChannel();
 
 CI builds it on every push and uploads the browser files (`symbolon-wasm`) with the run.
 
+### From Dart and Flutter
+
+`flutter/` is the Dart package `symbolon_flutter`: one API that calls the native library on phones
+and desktop (through flutter_rust_bridge) and the JavaScript binding on the web. See
+[flutter/README.md](flutter/README.md).
+
 ## What it doesn't do
 
 No sockets, no WebRTC and no relay client. Each app moves the bytes over its own transport and feeds

@@ -28,3 +28,5 @@ hex = "0.4"
 
 [workspace]
 members = ["wasm"]
+# Built by cargokit from inside the Dart package, with its own lock file and target directory.
+exclude = ["flutter/rust"]
