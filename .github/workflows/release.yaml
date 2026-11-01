@@ -1,0 +1,164 @@
+name: Release
+
+# Prebuilt Flutter libraries: on every push to main, for any crate hash that has none yet. cargokit
+# names each release precompiled_<hash of flutter/rust> and signs every file with CARGOKIT_PRIVATE_KEY;
+# apps check the signature with the public key in flutter/rust/cargokit.yaml, and build from source
+# when a library is missing or fails the check.
+#
+# The web binding: on every version tag (v*), attached to that tag's release with its SHA-256.
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  flutter-libraries:
+    name: Flutter libraries (${{ matrix.os }})
+    if: github.ref_type == 'branch'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            targets: >-
+              --target=x86_64-unknown-linux-gnu
+              --target=aarch64-linux-android --target=armv7-linux-androideabi --target=x86_64-linux-android
+          - os: macos-latest
+            targets: >-
+              --target=aarch64-apple-darwin --target=x86_64-apple-darwin
+              --target=aarch64-apple-ios --target=aarch64-apple-ios-sim --target=x86_64-apple-ios
+          - os: windows-latest
+            targets: --target=x86_64-pc-windows-msvc
+    defaults:
+      run:
+        shell: bash
+        working-directory: flutter/cargokit/build_tool
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    - name: Set up Rust
+      run: rustup toolchain install stable --profile minimal
+
+    - name: Set up Flutter
+      uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+      with:
+        flutter-version: '3.47.7'
+        channel: 'stable'
+        cache: true
+
+    - name: Check the core hash is current
+      working-directory: .
+      run: |
+        ./tool/core_hash.sh --write >/dev/null
+        git diff --exit-code flutter/rust/src/core_hash.rs
+
+    - name: Build, sign and upload
+      env:
+        PRIVATE_KEY: ${{ secrets.CARGOKIT_PRIVATE_KEY }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        if [ ! -f ../../rust/cargokit.yaml ]; then
+          echo "::notice::No signing key yet (tool/new_signing_key.sh), so no prebuilt libraries."
+          exit 0
+        fi
+        android=()
+        if [ "$RUNNER_OS" = Linux ]; then
+          android=(--android-sdk-location="$ANDROID_HOME"
+                   --android-ndk-version="$(basename "$ANDROID_NDK_LATEST_HOME")"
+                   --android-min-sdk-version=21)
+        fi
+        dart pub get
+        dart run build_tool precompile-binaries -v --manifest-dir=../../rust \
+          --repository="$GITHUB_REPOSITORY" ${{ matrix.targets }} "${android[@]}"
+
+  check-flutter-libraries:
+    name: Check prebuilt Flutter libraries
+    needs: flutter-libraries
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: flutter/cargokit/build_tool
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    - name: Set up Flutter
+      uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+      with:
+        flutter-version: '3.47.7'
+        channel: 'stable'
+        cache: true
+
+    # Downloads every published library for this crate hash and checks its signature.
+    - name: Verify
+      run: |
+        [ -f ../../rust/cargokit.yaml ] || exit 0
+        dart pub get
+        out=$(dart run build_tool verify-binaries --manifest-dir=../../rust)
+        echo "$out"
+        # It lists every target cargokit knows; only the ones built above have to be there.
+        for t in x86_64-unknown-linux-gnu aarch64-linux-android armv7-linux-androideabi \
+                 x86_64-linux-android aarch64-apple-darwin x86_64-apple-darwin aarch64-apple-ios \
+                 aarch64-apple-ios-sim x86_64-apple-ios x86_64-pc-windows-msvc; do
+          grep -E "Checking $t\.\.\. +OK" <<<"$out" >/dev/null || { echo "::error::$t missing or invalid"; exit 1; }
+        done
+        ! grep -q "INVALID SIGNATURE" <<<"$out"
+
+  web-binding:
+    name: Web binding
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      WASM_BINDGEN_VERSION: 0.2.129
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    - name: Set up Rust
+      run: |
+        rustup toolchain install stable --profile minimal
+        rustup target add wasm32-unknown-unknown
+        cargo install wasm-bindgen-cli --version "$WASM_BINDGEN_VERSION" --locked
+
+    - name: Build and test
+      run: |
+        cargo build --locked --release -p symbolon-wasm --target wasm32-unknown-unknown
+        wasm=target/wasm32-unknown-unknown/release/symbolon_wasm.wasm
+        wasm-bindgen --target nodejs --out-dir wasm/pkg-node "$wasm"
+        node --test wasm/tests/binding.test.mjs
+        wasm-bindgen --target web --no-typescript --out-dir dist/symbolon "$wasm"
+
+    - name: Package
+      run: |
+        name="symbolon-web-${GITHUB_REF_NAME}.tar.gz"
+        tar -C dist --sort=name --owner=0 --group=0 --numeric-owner --mtime='@0' -cf - symbolon | gzip -n > "$name"
+        sha256sum "$name" > "$name.sha256"
+        cat "$name.sha256"
+
+    - name: Attach to the release
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 ||
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --generate-notes
+        gh release upload "$GITHUB_REF_NAME" symbolon-web-*.tar.gz*
