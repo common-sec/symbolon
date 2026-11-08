@@ -10,7 +10,8 @@ name: Release
 # prepare job creates the draft, the build jobs upload to it, and publish makes it public once every
 # library is there. A published release can never be fixed, only replaced by a new crate hash.
 #
-# The web binding: on every version tag (v*), attached to that tag's release with its SHA-256.
+# The web binding: on every version tag (v*), attached to that tag's release with its SHA-256, after
+# the release environment approves it.
 on:
   push:
     branches: [ main ]
@@ -201,6 +202,9 @@ jobs:
     if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Publishing a version waits for the release environment's approval, like the Flutter libraries.
+    # The environment must allow v* tags as well as main.
+    environment: release
     permissions:
       contents: write
     env:
