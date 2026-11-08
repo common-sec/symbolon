@@ -1,0 +1,34 @@
+name: symbolon_flutter
+description: "Symbolon for Dart and Flutter: native code through flutter_rust_bridge, and the JavaScript binding on the web."
+publish_to: none
+version: 0.1.0
+repository: https://github.com/common-sec/symbolon
+
+environment:
+  sdk: ^3.13.5
+  flutter: '>=3.3.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_rust_bridge: 2.13.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        ffiPlugin: true
+      ios:
+        ffiPlugin: true
+      linux:
+        ffiPlugin: true
+      macos:
+        ffiPlugin: true
+      windows:
+        ffiPlugin: true
+
