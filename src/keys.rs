@@ -135,4 +135,17 @@ mod tests {
             Some(Error::InvalidKey)
         );
     }
+
+    /// Fixed outputs, so a change to the key schedule can't slip through, and so other bindings can
+    /// check they derive the same keys. The wasm binding's tests use the same values.
+    #[test]
+    fn known_values() {
+        let secret: Vec<u8> = (0..32).collect();
+        let keys = KeySchedule::new(b"test/v1", &secret).unwrap();
+        assert_eq!(hex::encode(keys.fingerprint()), "f7fa2518636b");
+        assert_eq!(
+            hex::encode(keys.topic(b"signal")),
+            "0aaf3dd06e80e9403c61c9b61d88868c0ce8e73352cad44508bcbda3cb99ddcb"
+        );
+    }
 }

@@ -20,3 +20,33 @@ updates:
       default-days: 7
     commit-message:
       prefix: "deps(actions)"
+
+  # The Flutter binding. flutter_rust_bridge is left alone: the Dart package, the crate and the
+  # generated code have to move to a new version together.
+  - package-ecosystem: cargo
+    directory: /flutter/rust
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "deps(cargo)"
+
+  - package-ecosystem: pub
+    directory: /flutter
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "deps(pub)"
+
+  # The image tool/new_signing_key.sh uses to generate the signing key.
+  - package-ecosystem: docker
+    directory: /tool/signing-key
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "deps(docker)"

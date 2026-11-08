@@ -1,0 +1,5 @@
+# Apps download prebuilt libraries from Symbolon's releases and check them with this key. A library
+# that is missing or fails the check is built from source instead.
+precompiled_binaries:
+  url_prefix: https://github.com/common-sec/symbolon/releases/download/precompiled_
+  public_key: b9faa021f61ecdf53ad4ba246605862eac6b1d5aa12178cc1880ae57681ac0e8
