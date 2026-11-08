@@ -10,7 +10,7 @@ Symbolon for Dart and Flutter. One Dart API with two backends that run the same 
 
 ## Using it
 
-Depend on it by git, pinned to a commit:
+Depend on it by git, pinned to a release tag (or a commit):
 
 ```yaml
 dependencies:
@@ -18,13 +18,18 @@ dependencies:
     git:
       url: https://github.com/common-sec/symbolon
       path: flutter
-      ref: <commit>
+      ref: v0.1.0
 ```
 
-Apps don't need Rust to build for phones or desktop. When the app builds, cargokit downloads the
-prebuilt library for each target from Symbolon's releases and checks its signature against the public
-key in `rust/cargokit.yaml`. If a library is missing or fails the check, cargokit builds it from
-source instead, which needs Rust (`rustup`).
+The dependency brings two things, and only one of them is ever compiled by the app:
+
+- **The Dart code** (the API, the generated bridge and cargokit's build scripts). Pub always uses Dart
+  packages as source; there is nothing to prebuild.
+- **The native library**, which is not compiled. When the app builds, cargokit downloads the prebuilt
+  library for each target from Symbolon's releases and checks its signature against the public key in
+  `rust/cargokit.yaml`. The download is chosen by a hash of `rust/` at the pinned commit, so it always
+  matches the Dart code next to it. Only if a library is missing or fails the check does cargokit
+  build it from source, which needs Rust (`rustup`).
 
 ```dart
 import 'package:symbolon_flutter/symbolon_flutter.dart';
