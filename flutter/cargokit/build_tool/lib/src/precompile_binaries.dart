@@ -71,12 +71,7 @@ class PrecompileBinaries {
 
     final github = GitHub(auth: Authentication.withToken(githubToken));
     final repo = github.repositories;
-    final release = await _getOrCreateRelease(
-      repo: repo,
-      tagName: tagName,
-      packageName: crateInfo.packageName,
-      hash: hash,
-    );
+    final release = await _getDraftRelease(repo: repo, tagName: tagName);
 
     final tempDir = this.tempDir != null
         ? Directory(this.tempDir!)
@@ -176,29 +171,20 @@ class PrecompileBinaries {
     tempDir.deleteSync(recursive: true);
   }
 
-  Future<Release> _getOrCreateRelease({
+  Future<Release> _getDraftRelease({
     required RepositoriesService repo,
     required String tagName,
-    required String packageName,
-    required String hash,
   }) async {
-    Release release;
-    try {
-      _log.info('Fetching release $tagName');
-      release = await repo.getReleaseByTagName(repositorySlug, tagName);
-    } on ReleaseNotFound {
-      _log.info('Release not found - creating release $tagName');
-      release = await repo.createRelease(
-          repositorySlug,
-          CreateRelease.from(
-            tagName: tagName,
-            name: 'Precompiled binaries ${hash.substring(0, 8)}',
-            targetCommitish: null,
-            isDraft: false,
-            isPrerelease: false,
-            body: 'Precompiled binaries for crate $packageName, '
-                'crate hash $hash.',
-          ));
+    // Symbolon: the repository makes published releases immutable, so assets can only be added to a
+    // draft. The release workflow creates the draft before this runs and publishes it afterwards;
+    // here we only look it up, drafts included, and never create one (parallel jobs would race).
+    _log.info('Fetching release $tagName');
+    final release = await repo
+        .listReleases(repositorySlug)
+        .cast<Release?>()
+        .firstWhere((r) => r!.tagName == tagName, orElse: () => null);
+    if (release == null) {
+      throw Exception('No release $tagName. Create it as a draft first.');
     }
     return release;
   }
