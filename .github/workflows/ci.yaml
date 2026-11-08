@@ -96,6 +96,13 @@ jobs:
         channel: 'stable'
         cache: true
 
+    # Prebuilt libraries are named by a hash of flutter/rust, which must follow core changes.
+    - name: Check the core hash is current
+      working-directory: .
+      run: |
+        ./tool/core_hash.sh --write >/dev/null
+        git diff --exit-code flutter/rust/src/core_hash.rs
+
     - name: Build the native library
       run: cargo build --locked --release --manifest-path rust/Cargo.toml
 

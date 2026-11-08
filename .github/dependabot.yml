@@ -44,3 +44,13 @@ updates:
       prefix: "deps(pub)"
     ignore:
       - dependency-name: flutter_rust_bridge
+
+  # The image tool/new_signing_key.sh uses to generate the signing key.
+  - package-ecosystem: docker
+    directory: /tool/signing-key
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "deps(docker)"
