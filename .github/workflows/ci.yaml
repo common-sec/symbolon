@@ -103,6 +103,17 @@ jobs:
         ./tool/core_hash.sh --write >/dev/null
         git diff --exit-code flutter/rust/src/core_hash.rs
 
+    # Dependabot bumps flutter_rust_bridge separately in Cargo.toml and pubspec.yaml. The two must match
+    # each other and the generated bridge, so a lone bump fails here until both are updated together
+    # and the bridge is regenerated.
+    - name: Check the flutter_rust_bridge versions match
+      run: |
+        rust=$(sed -n 's/^flutter_rust_bridge = "=\(.*\)"$/\1/p' rust/Cargo.toml)
+        dart=$(sed -n 's/^  flutter_rust_bridge: \(.*\)$/\1/p' pubspec.yaml)
+        generated=$(sed -n 's/.*FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "\(.*\)";/\1/p' rust/src/frb_generated.rs)
+        echo "Cargo.toml: $rust, pubspec.yaml: $dart, generated: $generated"
+        test -n "$rust" && test "$rust" = "$dart" && test "$rust" = "$generated"
+
     - name: Build the native library
       run: cargo build --locked --release --manifest-path rust/Cargo.toml
 

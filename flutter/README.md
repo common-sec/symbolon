@@ -34,8 +34,11 @@ The dependency brings two things, and only one of them is ever compiled by the a
 ```dart
 import 'package:symbolon_flutter/symbolon_flutter.dart';
 
+// Names your app and protocol version. Keys from different contexts never match, so keep it fixed.
+const appContext = 'my-app/v1';
+
 await loadSymbolon();
-final keys = symbolon.groupKeys(utf8.encode('my-app/v1'), groupSecret);
+final keys = symbolon.groupKeys(utf8.encode(appContext), groupSecret);
 final me = symbolon.deviceKeyFromPrivate(storedDeviceKey);
 final hs = symbolon.initiates(me.publicKey, peerPublic)
     ? symbolon.initiator(me, peerPublic, keys, prologue)
