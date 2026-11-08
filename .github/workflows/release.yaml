@@ -1,7 +1,8 @@
 name: Release
 
 # Prebuilt Flutter libraries: on every push to main, for any crate hash that has none yet. cargokit
-# names each release precompiled_<hash of flutter/rust> and signs every file with CARGOKIT_PRIVATE_KEY;
+# names each release precompiled_<hash of flutter/rust> and signs every file with CARGOKIT_PRIVATE_KEY,
+# a secret of the `release` environment that only main can use;
 # apps check the signature with the public key in flutter/rust/cargokit.yaml, and build from source
 # when a library is missing or fails the check.
 #
@@ -25,6 +26,8 @@ jobs:
     if: github.ref_type == 'branch'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
+    # The signing key is a secret of this environment, which only main may use.
+    environment: release
     permissions:
       contents: write
     strategy:

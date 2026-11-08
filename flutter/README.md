@@ -74,6 +74,7 @@ changing `rust/src/api/`, regenerate the Dart side with `flutter_rust_bridge_cod
 - **Prebuilt libraries:** every push to `main` builds the native library for Android, iOS, macOS,
   Linux and Windows, signs each file, and uploads it to a release named `precompiled_<hash>`, where the
   hash covers `rust/` (including `src/core_hash.rs`, which follows the core crate). The signing key is
-  the repository secret `CARGOKIT_PRIVATE_KEY`, made once with `../tool/new_signing_key.sh`.
+  the secret `CARGOKIT_PRIVATE_KEY` of the `release` environment, which only `main` can use. It is made
+  once with `../tool/new_signing_key.sh` and is only needed to publish, never to build.
 - **Web binding:** every `v*` tag attaches `symbolon-web-<tag>.tar.gz` and its SHA-256 to that tag's
   release.
