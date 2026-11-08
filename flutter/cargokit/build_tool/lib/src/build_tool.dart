@@ -13,6 +13,7 @@ import 'android_environment.dart';
 import 'build_cmake.dart';
 import 'build_gradle.dart';
 import 'build_pod.dart';
+import 'crate_hash.dart';
 import 'logging.dart';
 import 'options.dart';
 import 'precompile_binaries.dart';
@@ -236,6 +237,29 @@ class VerifyBinariesCommand extends Command {
   }
 }
 
+// Symbolon: prints the crate hash that names the precompiled_<hash> release, so the release
+// workflow can create that release as a draft before the build jobs upload to it.
+class CrateHashCommand extends Command {
+  CrateHashCommand() {
+    argParser.addOption(
+      'manifest-dir',
+      mandatory: true,
+      help: 'Directory containing Cargo.toml',
+    );
+  }
+
+  @override
+  final name = "crate-hash";
+
+  @override
+  final description = 'Prints the crate hash used to name precompiled binaries.';
+
+  @override
+  Future<void> run() async {
+    stdout.writeln(CrateHash.compute(argResults!['manifest-dir'] as String));
+  }
+}
+
 Future<void> runMain(List<String> args) async {
   try {
     // Init logging before options are loaded
@@ -251,7 +275,8 @@ Future<void> runMain(List<String> args) async {
       ..addCommand(BuildCMakeCommand())
       ..addCommand(GenKeyCommand())
       ..addCommand(PrecompileBinariesCommand())
-      ..addCommand(VerifyBinariesCommand());
+      ..addCommand(VerifyBinariesCommand())
+      ..addCommand(CrateHashCommand());
 
     await runner.run(args);
   } on ArgumentError catch (e) {

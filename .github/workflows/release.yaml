@@ -6,6 +6,10 @@ name: Release
 # apps check the signature with the public key in flutter/rust/cargokit.yaml, and build from source
 # when a library is missing or fails the check.
 #
+# Published releases are immutable in this repository, so files can only be added to a draft. The
+# prepare job creates the draft, the build jobs upload to it, and publish makes it public once every
+# library is there. A published release can never be fixed, only replaced by a new crate hash.
+#
 # The web binding: on every version tag (v*), attached to that tag's release with its SHA-256.
 on:
   push:
@@ -21,9 +25,59 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  prepare-flutter-libraries:
+    name: Prepare the Flutter libraries release
+    if: github.ref_type == 'branch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.draft.outputs.tag }}
+      build: ${{ steps.draft.outputs.build }}
+    defaults:
+      run:
+        working-directory: flutter/cargokit/build_tool
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    - name: Set up Flutter
+      uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+      with:
+        flutter-version: '3.47.7'
+        channel: 'stable'
+        cache: true
+
+    - name: Create the draft release
+      id: draft
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        if [ ! -f ../../rust/cargokit.yaml ]; then
+          echo "::notice::No signing key yet (tool/new_signing_key.sh), so no prebuilt libraries."
+          echo "build=false" >>"$GITHUB_OUTPUT"
+          exit 0
+        fi
+        dart pub get
+        tag="precompiled_$(dart run build_tool crate-hash --manifest-dir=../../rust)"
+        echo "tag=$tag" >>"$GITHUB_OUTPUT"
+        draft=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
+          --jq ".[] | select(.tag_name == \"$tag\") | .draft")
+        case "$draft" in
+          false) echo "::notice::$tag is already published."; echo "build=false" >>"$GITHUB_OUTPUT" ;;
+          true) echo "Reusing the draft $tag."; echo "build=true" >>"$GITHUB_OUTPUT" ;;
+          *) gh release create "$tag" --repo "$GITHUB_REPOSITORY" --draft --target "$GITHUB_SHA" \
+               --title "Precompiled binaries ${tag#precompiled_}" \
+               --notes "Precompiled binaries for crate symbolon_flutter, crate hash ${tag#precompiled_}."
+             echo "build=true" >>"$GITHUB_OUTPUT" ;;
+        esac
+
   flutter-libraries:
     name: Flutter libraries (${{ matrix.os }})
-    if: github.ref_type == 'branch'
+    needs: prepare-flutter-libraries
+    if: needs.prepare-flutter-libraries.outputs.build == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     # The signing key is a secret of this environment, which only main may use.
@@ -74,10 +128,6 @@ jobs:
         PRIVATE_KEY: ${{ secrets.CARGOKIT_PRIVATE_KEY }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        if [ ! -f ../../rust/cargokit.yaml ]; then
-          echo "::notice::No signing key yet (tool/new_signing_key.sh), so no prebuilt libraries."
-          exit 0
-        fi
         android=()
         if [ "$RUNNER_OS" = Linux ]; then
           android=(--android-sdk-location="$ANDROID_HOME"
@@ -88,9 +138,32 @@ jobs:
         dart run build_tool precompile-binaries -v --manifest-dir=../../rust \
           --repository="$GITHUB_REPOSITORY" ${{ matrix.targets }} "${android[@]}"
 
+  publish-flutter-libraries:
+    name: Publish the Flutter libraries release
+    needs: [ prepare-flutter-libraries, flutter-libraries ]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+    # Publishing makes the release immutable, so first check every target has its library and signature.
+    - name: Check the draft and publish it
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        TAG: ${{ needs.prepare-flutter-libraries.outputs.tag }}
+      run: |
+        assets=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
+          --jq ".[] | select(.tag_name == \"$TAG\" and .draft) | .assets[].name")
+        for t in x86_64-unknown-linux-gnu aarch64-linux-android armv7-linux-androideabi \
+                x86_64-linux-android aarch64-apple-darwin x86_64-apple-darwin aarch64-apple-ios \
+                aarch64-apple-ios-sim x86_64-apple-ios x86_64-pc-windows-msvc; do
+          grep -qx "${t}_.*\.sig" <<<"$assets" || { echo "::error::$t has no signed library in $TAG"; exit 1; }
+        done
+        gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest=false
+
   check-flutter-libraries:
     name: Check prebuilt Flutter libraries
-    needs: flutter-libraries
+    needs: publish-flutter-libraries
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -162,6 +235,7 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 ||
-          gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --generate-notes
-        gh release upload "$GITHUB_REF_NAME" symbolon-web-*.tar.gz*
+        # With files, gh creates the release as a draft, uploads them and only then publishes it,
+        # which an immutable release needs. A release made by hand first could not take the files.
+        gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --generate-notes \
+          symbolon-web-*.tar.gz*
