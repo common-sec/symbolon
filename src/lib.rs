@@ -9,6 +9,8 @@
 //!   pairing code, or a link secret mixed with a passphrase).
 //! - [`seal`] encrypts the few messages that must travel before a channel exists, such as WebRTC
 //!   offers and answers on a public relay.
+//! - [`signal::SignalBox`] seals those messages in one format, with strict parsing and replay limits,
+//!   and [`nostr`] posts them to public Nostr relays as ephemeral events signed with a throwaway key.
 //! - [`handshake::Handshake`] runs `Noise_IKpsk1_25519_ChaChaPoly_SHA256` and yields a
 //!   [`channel::Channel`] with forward secrecy and mutual authentication.
 //!
@@ -18,7 +20,9 @@
 pub mod channel;
 pub mod handshake;
 pub mod keys;
+pub mod nostr;
 pub mod seal;
+pub mod signal;
 
 mod error;
 

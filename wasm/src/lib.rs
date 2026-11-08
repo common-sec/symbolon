@@ -10,7 +10,9 @@ use js_sys::Uint8Array;
 use symbolon::channel::{self, Channel as InnerChannel};
 use symbolon::handshake::{self, Handshake as InnerHandshake, StaticKeypair};
 use symbolon::keys::{KeySchedule, Purpose};
+use symbolon::nostr::{self, EventSigner as InnerSigner};
 use symbolon::seal::Sealer;
+use symbolon::signal::{self, Kind, SessionId, Signal as InnerSignal, SignalBox as InnerBox};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use zeroize::Zeroizing;
@@ -34,6 +36,28 @@ fn key32(value: &Uint8Array) -> Result<[u8; 32], JsError> {
         .as_slice()
         .try_into()
         .map_err(|_| JsError::new("expected a 32-byte key"))
+}
+
+/// A JavaScript string argument, refusing anything else.
+fn text(value: &JsValue) -> Result<String, JsError> {
+    value
+        .as_string()
+        .ok_or_else(|| JsError::new("expected a string"))
+}
+
+/// A Unix time in seconds: a whole, non-negative, safe-integer number.
+fn seconds(value: f64) -> Result<u64, JsError> {
+    if value.fract() != 0.0 || !(0.0..=9_007_199_254_740_991.0).contains(&value) {
+        return Err(JsError::new("expected whole seconds"));
+    }
+    Ok(value as u64)
+}
+
+fn session(value: &Uint8Array) -> Result<SessionId, JsError> {
+    bytes(value)?
+        .as_slice()
+        .try_into()
+        .map_err(|_| JsError::new("expected a 16-byte session id"))
 }
 
 /// Every key of a group, derived from its secret. `context` names the app and protocol version, such
@@ -218,4 +242,167 @@ impl Channel {
     pub fn max_plaintext() -> usize {
         channel::MAX_PLAINTEXT
     }
+}
+
+/// A random session id for this run of the app (16 bytes, not secret).
+#[wasm_bindgen(js_name = newSession)]
+pub fn new_session() -> Result<Vec<u8>, JsError> {
+    Ok(signal::new_session().map_err(js)?.to_vec())
+}
+
+/// A signalling message. `kind` is one of `announce`, `offer`, `answer`, `candidate` and `bye`;
+/// `to` is all zeros for announce and bye, which go to everyone and have an empty body.
+#[wasm_bindgen]
+pub struct Signal {
+    inner: InnerSignal,
+}
+
+fn kind_name(kind: Kind) -> &'static str {
+    match kind {
+        Kind::Announce => "announce",
+        Kind::Offer => "offer",
+        Kind::Answer => "answer",
+        Kind::Candidate => "candidate",
+        Kind::Bye => "bye",
+    }
+}
+
+#[wasm_bindgen]
+impl Signal {
+    #[wasm_bindgen(constructor)]
+    pub fn new(
+        kind: &JsValue,
+        created_at: f64,
+        from: &Uint8Array,
+        to: &Uint8Array,
+        device: &Uint8Array,
+        body: &Uint8Array,
+    ) -> Result<Signal, JsError> {
+        let kind = match text(kind)?.as_str() {
+            "announce" => Kind::Announce,
+            "offer" => Kind::Offer,
+            "answer" => Kind::Answer,
+            "candidate" => Kind::Candidate,
+            "bye" => Kind::Bye,
+            _ => return Err(JsError::new("unknown signal kind")),
+        };
+        Ok(Self {
+            inner: InnerSignal {
+                kind,
+                created_at: seconds(created_at)?,
+                from: session(from)?,
+                to: session(to)?,
+                device: key32(device)?,
+                body: bytes(body)?.to_vec(),
+            },
+        })
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn kind(&self) -> String {
+        kind_name(self.inner.kind).into()
+    }
+
+    #[wasm_bindgen(getter, js_name = createdAt)]
+    pub fn created_at(&self) -> f64 {
+        self.inner.created_at as f64
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn from(&self) -> Vec<u8> {
+        self.inner.from.to_vec()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn to(&self) -> Vec<u8> {
+        self.inner.to.to_vec()
+    }
+
+    /// The sender's claimed device public key; only the handshake proves it.
+    #[wasm_bindgen(getter)]
+    pub fn device(&self) -> Vec<u8> {
+        self.inner.device.to_vec()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn body(&self) -> Vec<u8> {
+        self.inner.body.clone()
+    }
+}
+
+/// Seals and opens a group's signalling messages, as Nostr event content.
+#[wasm_bindgen]
+pub struct SignalBox {
+    inner: InnerBox,
+}
+
+#[wasm_bindgen]
+impl SignalBox {
+    #[wasm_bindgen(constructor)]
+    pub fn new(group: &GroupKeys) -> SignalBox {
+        Self {
+            inner: InnerBox::new(&group.keys),
+        }
+    }
+
+    /// The topic every device in the group posts and subscribes under.
+    #[wasm_bindgen(getter)]
+    pub fn topic(&self) -> Vec<u8> {
+        self.inner.topic().to_vec()
+    }
+
+    pub fn seal(&self, signal: &Signal) -> Result<String, JsError> {
+        self.inner.seal(&signal.inner).map_err(js)
+    }
+
+    /// `now` is this device's Unix time in seconds; messages too far from it are rejected.
+    pub fn open(&self, content: &JsValue, now: f64) -> Result<Signal, JsError> {
+        Ok(Signal {
+            inner: self
+                .inner
+                .open(&text(content)?, seconds(now)?)
+                .map_err(js)?,
+        })
+    }
+}
+
+/// Signs Nostr events with a throwaway key. Make one per app run and don't store it.
+#[wasm_bindgen]
+pub struct EventSigner {
+    inner: InnerSigner,
+}
+
+#[wasm_bindgen]
+impl EventSigner {
+    pub fn generate() -> Result<EventSigner, JsError> {
+        Ok(Self {
+            inner: InnerSigner::generate().map_err(js)?,
+        })
+    }
+
+    /// The public key as hex, as relays show it.
+    #[wasm_bindgen(getter, js_name = publicKey)]
+    pub fn public_key(&self) -> String {
+        self.inner.public_key_hex()
+    }
+
+    /// A signed signalling event as JSON, to send as `["EVENT", event]`.
+    #[wasm_bindgen(js_name = signalEvent)]
+    pub fn signal_event(
+        &self,
+        created_at: f64,
+        topic: &Uint8Array,
+        content: &JsValue,
+    ) -> Result<String, JsError> {
+        self.inner
+            .signal_event(seconds(created_at)?, &key32(topic)?, &text(content)?)
+            .map_err(js)
+    }
+}
+
+/// The relay filter for a topic's signalling events from `since` on, to send as
+/// `["REQ", subscriptionId, filter]`.
+#[wasm_bindgen(js_name = signalFilter)]
+pub fn signal_filter(topic: &Uint8Array, since: f64) -> Result<String, JsError> {
+    Ok(nostr::signal_filter(&key32(topic)?, seconds(since)?))
 }

@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `handshake`, `key32`
+// These functions are ignored because they are not marked as `pub`: `handshake`, `key32`, `seconds`, `session`
 
 /// Whether this device starts the handshake with `remote_public`.
 bool initiates({
@@ -17,6 +17,17 @@ bool initiates({
   localPublic: localPublic,
   remotePublic: remotePublic,
 );
+
+/// A random session id for this run of the app (16 bytes, not secret).
+Uint8List newSession() => RustLib.instance.api.crateApiSymbolonNewSession();
+
+/// The relay filter for a topic's signalling events from `since` on, to send as
+/// `["REQ", subscriptionId, filter]`.
+String signalFilter({required List<int> topic, required PlatformInt64 since}) =>
+    RustLib.instance.api.crateApiSymbolonSignalFilter(
+      topic: topic,
+      since: since,
+    );
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DeviceKey>>
 abstract class DeviceKey implements RustOpaqueInterface {
@@ -32,6 +43,22 @@ abstract class DeviceKey implements RustOpaqueInterface {
   Uint8List privateKey();
 
   Uint8List publicKey();
+}
+
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<EventSigner>>
+abstract class EventSigner implements RustOpaqueInterface {
+  static EventSigner generate() =>
+      RustLib.instance.api.crateApiSymbolonEventSignerGenerate();
+
+  /// The public key as hex, as relays show it.
+  String publicKey();
+
+  /// A signed signalling event as JSON, to send as `["EVENT", event]`.
+  String signalEvent({
+    required PlatformInt64 createdAt,
+    required List<int> topic,
+    required String content,
+  });
 }
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<GroupKeys>>
@@ -101,4 +128,61 @@ abstract class SecureChannel implements RustOpaqueInterface {
 
   static BigInt maxPlaintext() =>
       RustLib.instance.api.crateApiSymbolonSecureChannelMaxPlaintext();
+}
+
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<SignalBox>>
+abstract class SignalBox implements RustOpaqueInterface {
+  factory SignalBox({required GroupKeys group}) =>
+      RustLib.instance.api.crateApiSymbolonSignalBoxNew(group: group);
+
+  /// `now` is this device's Unix time in seconds; messages too far from it are rejected.
+  SignalMessage open({required String content, required PlatformInt64 now});
+
+  String seal({required SignalMessage message});
+
+  /// The topic every device in the group posts and subscribes under.
+  Uint8List topic();
+}
+
+/// A signalling message. `kind` is one of `announce`, `offer`, `answer`, `candidate` and `bye`;
+/// `to` is all zeros for announce and bye, which go to everyone and have an empty body.
+class SignalMessage {
+  final String kind;
+  final PlatformInt64 createdAt;
+  final Uint8List from;
+  final Uint8List to;
+
+  /// The sender's claimed device public key; only the handshake proves it.
+  final Uint8List device;
+  final Uint8List body;
+
+  const SignalMessage({
+    required this.kind,
+    required this.createdAt,
+    required this.from,
+    required this.to,
+    required this.device,
+    required this.body,
+  });
+
+  @override
+  int get hashCode =>
+      kind.hashCode ^
+      createdAt.hashCode ^
+      from.hashCode ^
+      to.hashCode ^
+      device.hashCode ^
+      body.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SignalMessage &&
+          runtimeType == other.runtimeType &&
+          kind == other.kind &&
+          createdAt == other.createdAt &&
+          from == other.from &&
+          to == other.to &&
+          device == other.device &&
+          body == other.body;
 }

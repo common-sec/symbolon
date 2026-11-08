@@ -8,7 +8,9 @@ use flutter_rust_bridge::frb;
 use symbolon::channel::Channel;
 use symbolon::handshake::{self, Handshake, StaticKeypair};
 use symbolon::keys::{KeySchedule, Purpose};
+use symbolon::nostr::{self, EventSigner as InnerSigner};
 use symbolon::seal::Sealer;
+use symbolon::signal::{self, Kind, Signal, SignalBox as InnerBox};
 
 fn key32(bytes: &[u8]) -> Result<[u8; 32]> {
     bytes.try_into().map_err(|_| anyhow!("expected 32 bytes"))
@@ -193,6 +195,134 @@ impl SecureChannel {
     pub fn max_plaintext() -> usize {
         symbolon::channel::MAX_PLAINTEXT
     }
+}
+
+fn session(bytes: &[u8]) -> Result<signal::SessionId> {
+    bytes
+        .try_into()
+        .map_err(|_| anyhow!("expected a 16-byte session id"))
+}
+
+/// Unix seconds come from Dart as a signed 64-bit int.
+fn seconds(value: i64) -> Result<u64> {
+    u64::try_from(value).map_err(|_| anyhow!("expected non-negative seconds"))
+}
+
+/// A random session id for this run of the app (16 bytes, not secret).
+#[frb(sync)]
+pub fn new_session() -> Result<Vec<u8>> {
+    Ok(signal::new_session()?.to_vec())
+}
+
+/// A signalling message. `kind` is one of `announce`, `offer`, `answer`, `candidate` and `bye`;
+/// `to` is all zeros for announce and bye, which go to everyone and have an empty body.
+pub struct SignalMessage {
+    pub kind: String,
+    pub created_at: i64,
+    pub from: Vec<u8>,
+    pub to: Vec<u8>,
+    /// The sender's claimed device public key; only the handshake proves it.
+    pub device: Vec<u8>,
+    pub body: Vec<u8>,
+}
+
+/// Seals and opens a group's signalling messages, as Nostr event content.
+#[frb(opaque)]
+pub struct SignalBox {
+    inner: InnerBox,
+}
+
+impl SignalBox {
+    #[frb(sync)]
+    pub fn new(group: &GroupKeys) -> SignalBox {
+        Self {
+            inner: InnerBox::new(&group.keys),
+        }
+    }
+
+    /// The topic every device in the group posts and subscribes under.
+    #[frb(sync)]
+    pub fn topic(&self) -> Vec<u8> {
+        self.inner.topic().to_vec()
+    }
+
+    #[frb(sync)]
+    pub fn seal(&self, message: SignalMessage) -> Result<String> {
+        let kind = match message.kind.as_str() {
+            "announce" => Kind::Announce,
+            "offer" => Kind::Offer,
+            "answer" => Kind::Answer,
+            "candidate" => Kind::Candidate,
+            "bye" => Kind::Bye,
+            _ => return Err(anyhow!("unknown signal kind")),
+        };
+        let signal = Signal {
+            kind,
+            created_at: seconds(message.created_at)?,
+            from: session(&message.from)?,
+            to: session(&message.to)?,
+            device: key32(&message.device)?,
+            body: message.body,
+        };
+        Ok(self.inner.seal(&signal)?)
+    }
+
+    /// `now` is this device's Unix time in seconds; messages too far from it are rejected.
+    #[frb(sync)]
+    pub fn open(&self, content: String, now: i64) -> Result<SignalMessage> {
+        let signal = self.inner.open(&content, seconds(now)?)?;
+        let kind = match signal.kind {
+            Kind::Announce => "announce",
+            Kind::Offer => "offer",
+            Kind::Answer => "answer",
+            Kind::Candidate => "candidate",
+            Kind::Bye => "bye",
+        };
+        Ok(SignalMessage {
+            kind: kind.into(),
+            created_at: signal.created_at as i64,
+            from: signal.from.to_vec(),
+            to: signal.to.to_vec(),
+            device: signal.device.to_vec(),
+            body: signal.body,
+        })
+    }
+}
+
+/// Signs Nostr events with a throwaway key. Make one per app run and don't store it.
+#[frb(opaque)]
+pub struct EventSigner {
+    inner: InnerSigner,
+}
+
+impl EventSigner {
+    #[frb(sync)]
+    pub fn generate() -> Result<EventSigner> {
+        Ok(Self {
+            inner: InnerSigner::generate()?,
+        })
+    }
+
+    /// The public key as hex, as relays show it.
+    #[frb(sync)]
+    pub fn public_key(&self) -> String {
+        self.inner.public_key_hex()
+    }
+
+    /// A signed signalling event as JSON, to send as `["EVENT", event]`.
+    #[frb(sync)]
+    pub fn signal_event(&self, created_at: i64, topic: Vec<u8>, content: String) -> Result<String> {
+        Ok(self
+            .inner
+            .signal_event(seconds(created_at)?, &key32(&topic)?, &content)?)
+    }
+}
+
+/// The relay filter for a topic's signalling events from `since` on, to send as
+/// `["REQ", subscriptionId, filter]`.
+#[frb(sync)]
+pub fn signal_filter(topic: Vec<u8>, since: i64) -> Result<String> {
+    Ok(nostr::signal_filter(&key32(&topic)?, seconds(since)?))
 }
 
 #[frb(init)]
