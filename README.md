@@ -16,6 +16,8 @@ browser (through WebAssembly).
 | --- | --- |
 | `keys` | One shared secret (a pairing code, or a link secret mixed with a passphrase) gives every key through HKDF-SHA256, bound to an app context and a purpose: signalling password, seal key, relay topic key, Noise PSK, fingerprint. |
 | `seal` | XChaCha20-Poly1305 for the few messages sent before a channel exists, such as WebRTC offers and answers on a public relay. |
+| `signal` | Those messages in one format (announce, offer, answer, candidate, bye), sealed and bound to the group's relay topic, with a strict parser, size limits and a two-minute replay window. |
+| `nostr` | Builds the Nostr events that carry them: ephemeral kind 21059, tagged with the topic, signed (BIP-340) with a throwaway key per app run. Relays don't store them and can't link sessions by key. |
 | `handshake` | `Noise_IKpsk1_25519_ChaChaPoly_SHA256` on [snow](https://github.com/mcginty/snow). Mutual authentication, forward secrecy, and a responder that rejects anyone without the secret before answering. |
 | `channel` | The transport after the handshake, with size limits and rekeying. Needs an ordered, reliable transport; any lost, reordered, replayed or altered message closes it. |
 
@@ -57,6 +59,22 @@ let mut channel = hs.into_channel()?;
 let wire = channel.encrypt(b"changes")?;        // send; the peer calls channel.decrypt(&wire)?
 ```
 
+Finding each other on a Nostr relay before there is a channel:
+
+```rust
+use symbolon::{nostr::{signal_filter, EventSigner}, signal::{new_session, Kind, Signal, SignalBox, EVERYONE}};
+
+let signals = SignalBox::new(&keys);
+let signer = EventSigner::generate()?;          // once per app run, never stored
+let session = new_session()?;
+// Subscribe: send ["REQ", "<sub id>", signal_filter(&signals.topic(), now)] to the relay.
+let hello = Signal { kind: Kind::Announce, created_at: now, from: session, to: EVERYONE,
+                     device: *me.public(), body: vec![] };
+let event = signer.signal_event(now, &signals.topic(), &signals.seal(&hello)?)?;
+// Publish: send ["EVENT", event]. For each event the relay sends back, signals.open(content, now)
+// rejects anything that isn't from this group, is malformed, or is older than two minutes.
+```
+
 ### From JavaScript
 
 `wasm/` is a binding for browsers and Node, made with wasm-bindgen. It has the same objects, takes and
@@ -86,7 +104,7 @@ and desktop (through flutter_rust_bridge) and the JavaScript binding on the web.
 
 ## What it doesn't do
 
-No sockets, no WebRTC and no relay client. Each app moves the bytes over its own transport and feeds
+No sockets, no WebRTC and no relay client: `nostr` only writes the JSON to send. Each app moves the bytes over its own transport and feeds
 received bytes back in. Keeping I/O out keeps the security-critical code small, testable and the same
 on every platform. Everything decrypted from a peer is still untrusted input for the app to validate.
 
@@ -97,6 +115,8 @@ on every platform. Everything decrypted from a peer is still untrusted input for
 - **Why ChaChaPoly:** WebAssembly has no AES instructions; ChaCha20 was about 5× faster there.
 - **Who initiates:** when both devices know each other's static key, the lower public key initiates
   (`handshake::initiates`).
+- **Signalling metadata:** relays see the topic, the time, the size and the IP of each event, never
+  its content. The topic stays the same for a group, so a relay can tell when its devices come online.
 - **Not post-quantum.** Recorded traffic is not safe from a future quantum computer. Open question.
 - **snow is not audited**, though widely used. The tests replay the independent cacophony vectors.
 

@@ -11,8 +11,7 @@ Future<Symbolon> load({required String webModule, String? nativeLibrary}) async 
   return _Web(module);
 }
 
-JSUint8Array _js(List<int> bytes) =>
-    (bytes is Uint8List ? bytes : Uint8List.fromList(bytes)).toJS;
+JSUint8Array _js(List<int> bytes) => (bytes is Uint8List ? bytes : Uint8List.fromList(bytes)).toJS;
 
 Uint8List _dart(JSAny? value) => (value as JSUint8Array).toDart;
 
@@ -36,24 +35,106 @@ class _Web implements Symbolon {
       _DeviceKey(_class('DeviceKey').callMethod<JSObject>('fromPrivate'.toJS, _js(privateKey)));
 
   @override
-  bool initiates(List<int> localPublic, List<int> remotePublic) => module
-      .callMethod<JSBoolean>('initiates'.toJS, _js(localPublic), _js(remotePublic))
-      .toDart;
+  bool initiates(List<int> localPublic, List<int> remotePublic) =>
+      module.callMethod<JSBoolean>('initiates'.toJS, _js(localPublic), _js(remotePublic)).toDart;
 
   @override
-  SymbolonHandshake initiator(SymbolonDeviceKey device, List<int> remotePublic,
-          SymbolonGroupKeys group, List<int> prologue) =>
-      _Handshake(_class('Handshake').callMethod<JSObject>('initiator'.toJS,
-          (device as _DeviceKey).inner, _js(remotePublic), (group as _GroupKeys).inner, _js(prologue)));
+  SymbolonHandshake initiator(
+    SymbolonDeviceKey device,
+    List<int> remotePublic,
+    SymbolonGroupKeys group,
+    List<int> prologue,
+  ) => _Handshake(
+    _class('Handshake').callMethod<JSObject>(
+      'initiator'.toJS,
+      (device as _DeviceKey).inner,
+      _js(remotePublic),
+      (group as _GroupKeys).inner,
+      _js(prologue),
+    ),
+  );
 
   @override
   SymbolonHandshake responder(
-          SymbolonDeviceKey device, SymbolonGroupKeys group, List<int> prologue) =>
-      _Handshake(_class('Handshake').callMethod<JSObject>('responder'.toJS,
-          (device as _DeviceKey).inner, (group as _GroupKeys).inner, _js(prologue)));
+    SymbolonDeviceKey device,
+    SymbolonGroupKeys group,
+    List<int> prologue,
+  ) => _Handshake(
+    _class('Handshake').callMethod<JSObject>(
+      'responder'.toJS,
+      (device as _DeviceKey).inner,
+      (group as _GroupKeys).inner,
+      _js(prologue),
+    ),
+  );
 
   @override
   int get maxPlaintext => _class('Channel').callMethod<JSNumber>('maxPlaintext'.toJS).toDartInt;
+
+  @override
+  Uint8List newSession() => _dart(module.callMethod('newSession'.toJS));
+
+  @override
+  SymbolonSignalBox signalBox(SymbolonGroupKeys group) => _SignalBox(
+    this,
+    _class('SignalBox').callAsConstructor<JSObject>((group as _GroupKeys).inner),
+  );
+
+  @override
+  SymbolonEventSigner eventSigner() =>
+      _EventSigner(_class('EventSigner').callMethod<JSObject>('generate'.toJS));
+
+  @override
+  String signalFilter(List<int> topic, int since) =>
+      module.callMethod<JSString>('signalFilter'.toJS, _js(topic), since.toJS).toDart;
+}
+
+class _SignalBox implements SymbolonSignalBox {
+  final _Web web;
+  final JSObject inner;
+  @override
+  final Uint8List topic;
+
+  _SignalBox(this.web, this.inner) : topic = _dart(inner['topic']);
+
+  @override
+  String seal(SymbolonSignal s) {
+    final signal = web._class('Signal').callAsConstructorVarArgs<JSObject>([
+      s.kind.name.toJS,
+      s.createdAt.toJS,
+      _js(s.from),
+      _js(s.to),
+      _js(s.device),
+      _js(s.body),
+    ]);
+    return inner.callMethod<JSString>('seal'.toJS, signal).toDart;
+  }
+
+  @override
+  SymbolonSignal open(String content, int now) {
+    final m = inner.callMethod<JSObject>('open'.toJS, content.toJS, now.toJS);
+    return SymbolonSignal(
+      kind: SignalKind.values.byName((m['kind'] as JSString).toDart),
+      createdAt: (m['createdAt'] as JSNumber).toDartInt,
+      from: _dart(m['from']),
+      to: _dart(m['to']),
+      device: _dart(m['device']),
+      body: _dart(m['body']),
+    );
+  }
+}
+
+class _EventSigner implements SymbolonEventSigner {
+  final JSObject inner;
+  @override
+  final String publicKey;
+
+  _EventSigner(this.inner) : publicKey = (inner['publicKey'] as JSString).toDart;
+
+  @override
+  String signalEvent(int createdAt, List<int> topic, String content) => inner
+      .callMethod<JSString>('signalEvent'.toJS, createdAt.toJS, _js(topic), content.toJS)
+      .toDart;
 }
 
 class _GroupKeys implements SymbolonGroupKeys {
@@ -119,8 +200,7 @@ class _Channel implements SymbolonChannel {
   _Channel(this.inner);
 
   @override
-  Uint8List encrypt(List<int> plaintext) =>
-      _dart(inner.callMethod('encrypt'.toJS, _js(plaintext)));
+  Uint8List encrypt(List<int> plaintext) => _dart(inner.callMethod('encrypt'.toJS, _js(plaintext)));
 
   @override
   Uint8List decrypt(List<int> ciphertext) =>

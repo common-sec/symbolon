@@ -65,3 +65,39 @@ test('refuses anything that is not a Uint8Array', () => {
   assert.throws(() => DeviceKey.fromPrivate('x'.repeat(32)), /Uint8Array/);
   assert.throws(() => initiates(new Uint8Array(32), new Uint8Array(31)), /32-byte/);
 });
+
+test('signalling messages and Nostr events', () => {
+  const { Signal, SignalBox, EventSigner, newSession, signalFilter } =
+    createRequire(import.meta.url)('../pkg-node/symbolon_wasm.js');
+  const box = new SignalBox(new GroupKeys(context, secret));
+  // The same topic as the Rust crate's known value, since SignalBox uses the label "signal".
+  assert.equal(hex(box.topic),
+    '0aaf3dd06e80e9403c61c9b61d88868c0ce8e73352cad44508bcbda3cb99ddcb');
+
+  const now = 1_800_000_000;
+  const [me, you] = [newSession(), newSession()];
+  const device = DeviceKey.generate().publicKey;
+  const offer = new Signal('offer', now, me, you, device, enc('v=0'));
+  const content = box.seal(offer);
+  const opened = box.open(content, now + 1);
+  assert.equal(opened.kind, 'offer');
+  assert.equal(opened.createdAt, now);
+  assert.deepEqual([opened.from, opened.to, opened.device, opened.body], [me, you, device, enc('v=0')]);
+  assert.throws(() => box.open(content, now + 3600));
+  assert.throws(() => new SignalBox(new GroupKeys(enc('other/v1'), secret)).open(content, now));
+  // Announce goes to everyone; an offer to everyone or an unknown kind is refused.
+  box.seal(new Signal('announce', now, me, new Uint8Array(16), device, new Uint8Array()));
+  assert.throws(() => box.seal(new Signal('offer', now, me, new Uint8Array(16), device, enc('x'))));
+  assert.throws(() => new Signal('hello', now, me, you, device, enc('x')));
+  assert.throws(() => new Signal('offer', 1.5, me, you, device, enc('x')));
+
+  const signer = EventSigner.generate();
+  const event = JSON.parse(signer.signalEvent(now, box.topic, content));
+  assert.equal(event.pubkey, signer.publicKey);
+  assert.equal(event.content, content);
+  assert.deepEqual(event.tags[0], ['t', hex(box.topic)]);
+  assert.notEqual(EventSigner.generate().publicKey, signer.publicKey);
+  assert.throws(() => signer.signalEvent(now, box.topic, 'needs "escaping"'));
+  assert.deepEqual(JSON.parse(signalFilter(box.topic, now)),
+    { kinds: [21059], '#t': [hex(box.topic)], since: now });
+});

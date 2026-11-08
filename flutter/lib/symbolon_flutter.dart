@@ -18,13 +18,103 @@ abstract class Symbolon {
   /// Whether the device with `localPublic` starts the handshake.
   bool initiates(List<int> localPublic, List<int> remotePublic);
 
-  SymbolonHandshake initiator(SymbolonDeviceKey device, List<int> remotePublic,
-      SymbolonGroupKeys group, List<int> prologue);
+  SymbolonHandshake initiator(
+    SymbolonDeviceKey device,
+    List<int> remotePublic,
+    SymbolonGroupKeys group,
+    List<int> prologue,
+  );
 
-  SymbolonHandshake responder(SymbolonDeviceKey device, SymbolonGroupKeys group, List<int> prologue);
+  SymbolonHandshake responder(
+    SymbolonDeviceKey device,
+    SymbolonGroupKeys group,
+    List<int> prologue,
+  );
 
   /// The largest plaintext one channel message can carry.
   int get maxPlaintext;
+
+  /// A random session id for this run of the app (16 bytes, not secret).
+  Uint8List newSession();
+
+  /// Seals and opens `group`'s signalling messages.
+  SymbolonSignalBox signalBox(SymbolonGroupKeys group);
+
+  /// A new throwaway key for signing Nostr events. Make one per app run and don't store it.
+  SymbolonEventSigner eventSigner();
+
+  /// The relay filter for `topic`'s signalling events from `since` (Unix seconds) on, to send as
+  /// `["REQ", subscriptionId, filter]`.
+  String signalFilter(List<int> topic, int since);
+}
+
+enum SignalKind {
+  /// "I'm online", to everyone.
+  announce,
+
+  /// A connection offer, such as a WebRTC SDP offer.
+  offer,
+
+  /// The answer to an offer.
+  answer,
+
+  /// A further connection candidate, such as a WebRTC ICE candidate.
+  candidate,
+
+  /// "I'm going offline", to everyone.
+  bye,
+}
+
+/// A signalling message. Announce and bye go to everyone: `to` is all zeros and `body` is empty.
+class SymbolonSignal {
+  final SignalKind kind;
+
+  /// Unix seconds when it was made.
+  final int createdAt;
+
+  /// The sender's session id.
+  final Uint8List from;
+
+  /// The receiver's session id, or all zeros for everyone.
+  final Uint8List to;
+
+  /// The sender's claimed device public key; only the handshake proves it.
+  final Uint8List device;
+  final Uint8List body;
+
+  /// Leave out `to` for announce and bye, which go to everyone.
+  SymbolonSignal({
+    required this.kind,
+    required this.createdAt,
+    required List<int> from,
+    List<int>? to,
+    required List<int> device,
+    List<int> body = const [],
+  }) : from = Uint8List.fromList(from),
+       to = Uint8List.fromList(to ?? List.filled(16, 0)),
+       device = Uint8List.fromList(device),
+       body = Uint8List.fromList(body);
+}
+
+/// Seals a group's signalling messages into Nostr event content, and opens them.
+abstract class SymbolonSignalBox {
+  /// The topic every device in the group posts and subscribes under.
+  Uint8List get topic;
+
+  String seal(SymbolonSignal signal);
+
+  /// `now` is this device's Unix time in seconds; messages too far from it, from another group, or
+  /// malformed throw.
+  SymbolonSignal open(String content, int now);
+}
+
+/// Signs Nostr events with a throwaway key.
+abstract class SymbolonEventSigner {
+  /// The public key as hex, as relays show it.
+  String get publicKey;
+
+  /// A signed signalling event as JSON, to send as `["EVENT", event]`.
+  String signalEvent(int createdAt, List<int> topic, String content);
 }
 
 abstract class SymbolonGroupKeys {
@@ -69,11 +159,12 @@ Symbolon? _loaded;
 /// On the web, `webModule` is where the app serves the JavaScript binding (see the README), relative
 /// to the page. `nativeLibrary` overrides where the native library is loaded from, for tests that
 /// run outside a Flutter app.
-Future<Symbolon> loadSymbolon(
-        {String webModule = './symbolon/symbolon_wasm.js', String? nativeLibrary}) =>
-    _loading ??= backend
-        .load(webModule: webModule, nativeLibrary: nativeLibrary)
-        .then((s) => _loaded = s);
+Future<Symbolon> loadSymbolon({
+  String webModule = './symbolon/symbolon_wasm.js',
+  String? nativeLibrary,
+}) => _loading ??= backend
+    .load(webModule: webModule, nativeLibrary: nativeLibrary)
+    .then((s) => _loaded = s);
 
 /// Symbolon after [loadSymbolon] has finished.
 Symbolon get symbolon =>

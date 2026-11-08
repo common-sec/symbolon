@@ -6,7 +6,8 @@ import 'rust/frb_generated.dart';
 
 Future<Symbolon> load({required String webModule, String? nativeLibrary}) async {
   await RustLib.init(
-      externalLibrary: nativeLibrary == null ? null : ExternalLibrary.open(nativeLibrary));
+    externalLibrary: nativeLibrary == null ? null : ExternalLibrary.open(nativeLibrary),
+  );
   return _Native();
 }
 
@@ -27,24 +28,93 @@ class _Native implements Symbolon {
       rust.initiates(localPublic: localPublic, remotePublic: remotePublic);
 
   @override
-  SymbolonHandshake initiator(SymbolonDeviceKey device, List<int> remotePublic,
-          SymbolonGroupKeys group, List<int> prologue) =>
-      _Handshake(rust.NoiseHandshake.initiator(
-          device: (device as _DeviceKey).inner,
-          remotePublic: remotePublic,
-          group: (group as _GroupKeys).inner,
-          prologue: prologue));
+  SymbolonHandshake initiator(
+    SymbolonDeviceKey device,
+    List<int> remotePublic,
+    SymbolonGroupKeys group,
+    List<int> prologue,
+  ) => _Handshake(
+    rust.NoiseHandshake.initiator(
+      device: (device as _DeviceKey).inner,
+      remotePublic: remotePublic,
+      group: (group as _GroupKeys).inner,
+      prologue: prologue,
+    ),
+  );
 
   @override
   SymbolonHandshake responder(
-          SymbolonDeviceKey device, SymbolonGroupKeys group, List<int> prologue) =>
-      _Handshake(rust.NoiseHandshake.responder(
-          device: (device as _DeviceKey).inner,
-          group: (group as _GroupKeys).inner,
-          prologue: prologue));
+    SymbolonDeviceKey device,
+    SymbolonGroupKeys group,
+    List<int> prologue,
+  ) => _Handshake(
+    rust.NoiseHandshake.responder(
+      device: (device as _DeviceKey).inner,
+      group: (group as _GroupKeys).inner,
+      prologue: prologue,
+    ),
+  );
 
   @override
   int get maxPlaintext => rust.SecureChannel.maxPlaintext().toInt();
+
+  @override
+  Uint8List newSession() => rust.newSession();
+
+  @override
+  SymbolonSignalBox signalBox(SymbolonGroupKeys group) =>
+      _SignalBox(rust.SignalBox(group: (group as _GroupKeys).inner));
+
+  @override
+  SymbolonEventSigner eventSigner() => _EventSigner(rust.EventSigner.generate());
+
+  @override
+  String signalFilter(List<int> topic, int since) => rust.signalFilter(topic: topic, since: since);
+}
+
+class _SignalBox implements SymbolonSignalBox {
+  final rust.SignalBox inner;
+  @override
+  final Uint8List topic;
+
+  _SignalBox(this.inner) : topic = inner.topic();
+
+  @override
+  String seal(SymbolonSignal signal) => inner.seal(
+    message: rust.SignalMessage(
+      kind: signal.kind.name,
+      createdAt: signal.createdAt,
+      from: signal.from,
+      to: signal.to,
+      device: signal.device,
+      body: signal.body,
+    ),
+  );
+
+  @override
+  SymbolonSignal open(String content, int now) {
+    final m = inner.open(content: content, now: now);
+    return SymbolonSignal(
+      kind: SignalKind.values.byName(m.kind),
+      createdAt: m.createdAt,
+      from: m.from,
+      to: m.to,
+      device: m.device,
+      body: m.body,
+    );
+  }
+}
+
+class _EventSigner implements SymbolonEventSigner {
+  final rust.EventSigner inner;
+  @override
+  final String publicKey;
+
+  _EventSigner(this.inner) : publicKey = inner.publicKey();
+
+  @override
+  String signalEvent(int createdAt, List<int> topic, String content) =>
+      inner.signalEvent(createdAt: createdAt, topic: topic, content: content);
 }
 
 class _GroupKeys implements SymbolonGroupKeys {
