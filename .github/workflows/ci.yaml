@@ -114,6 +114,16 @@ jobs:
         echo "Cargo.toml: $rust, pubspec.yaml: $dart, generated: $generated"
         test -n "$rust" && test "$rust" = "$dart" && test "$rust" = "$generated"
 
+    # A release tag must match this version (release.yaml), so keep every package at the same one.
+    - name: Check the package versions match
+      working-directory: .
+      run: |
+        version=$(sed -n 's/^version: //p' flutter/pubspec.yaml)
+        echo "flutter/pubspec.yaml: $version"
+        for f in Cargo.toml flutter/rust/Cargo.toml wasm/Cargo.toml; do
+          grep -qx "version = \"$version\"" "$f" || { echo "::error::$f is not at version $version"; exit 1; }
+        done
+
     - name: Build the native library
       run: cargo build --locked --release --manifest-path rust/Cargo.toml
 
