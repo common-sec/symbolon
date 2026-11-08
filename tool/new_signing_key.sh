@@ -4,15 +4,15 @@
 # which only the main branch can use, and is never printed or written to disk. Nobody needs it to
 # build: apps only use the public key. The public key goes into flutter/rust/cargokit.yaml, where apps read it to
 # check every library they download; commit that change.
-# Needs Dart (or Flutter, or Docker: DART='docker' runs it in the dart:stable image) and the GitHub CLI,
+# Needs Dart (or Flutter, or Docker: DART=docker runs it in the pinned image from tool/signing-key/Dockerfile) and the GitHub CLI,
 # signed in with admin rights on the repository.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 repo=${1:-common-sec/symbolon}
 
 if [ "${DART:-dart}" = docker ]; then
-  out=$(docker run --rm -v "$PWD/flutter/cargokit/build_tool:/w" -w /w dart:stable \
-    sh -c 'dart pub get >/dev/null && dart run build_tool gen-key')
+  docker build -q -t symbolon-signing-key -f tool/signing-key/Dockerfile flutter/cargokit/build_tool >/dev/null
+  out=$(docker run --rm --network none symbolon-signing-key)
 else
   out=$(cd flutter/cargokit/build_tool && dart pub get >/dev/null && dart run build_tool gen-key)
 fi
