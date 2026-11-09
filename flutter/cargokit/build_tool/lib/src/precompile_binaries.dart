@@ -13,6 +13,7 @@ import 'builder.dart';
 import 'cargo.dart';
 import 'crate_hash.dart';
 import 'options.dart';
+import 'release_tag.dart';
 import 'rustup.dart';
 import 'target.dart';
 
@@ -67,7 +68,7 @@ class PrecompileBinaries {
     final hash = CrateHash.compute(manifestDir);
     _log.info('Computed crate hash: $hash');
 
-    final String tagName = 'precompiled_$hash';
+    final String tagName = precompiledTag(manifestDir, hash);
 
     final github = GitHub(auth: Authentication.withToken(githubToken));
     final repo = github.repositories;

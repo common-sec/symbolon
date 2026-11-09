@@ -1,6 +1,6 @@
 [package]
 name = "symbolon_flutter"
-version = "0.1.0"
+version = "0.3.0"
 edition = "2021"
 rust-version = "1.85"
 description = "flutter_rust_bridge binding of Symbolon, built into the symbolon_flutter Dart package"

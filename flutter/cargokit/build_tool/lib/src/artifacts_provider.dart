@@ -12,6 +12,7 @@ import 'builder.dart';
 import 'crate_hash.dart';
 import 'options.dart';
 import 'precompile_binaries.dart';
+import 'release_tag.dart';
 import 'rustup.dart';
 import 'target.dart';
 
@@ -188,9 +189,10 @@ class ArtifactProvider {
     required String finalPath,
   }) async {
     final precompiledBinaries = environment.crateOptions.precompiledBinaries!;
-    final prefix = precompiledBinaries.uriPrefix;
-    final url = Uri.parse('$prefix$crateHash/$fileName');
-    final signatureUrl = Uri.parse('$prefix$crateHash/$signatureFileName');
+    final prefix = precompiledBinaries.uriPrefix +
+        precompiledTag(environment.manifestDir, crateHash);
+    final url = Uri.parse('$prefix/$fileName');
+    final signatureUrl = Uri.parse('$prefix/$signatureFileName');
     _log.fine('Downloading signature from $signatureUrl');
     final signature = await _get(signatureUrl);
     if (signature.statusCode == 404) {

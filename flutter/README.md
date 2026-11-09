@@ -26,9 +26,9 @@ The dependency brings two things, and only one of them is ever compiled by the a
 - **The Dart code** (the API, the generated bridge and cargokit's build scripts). Pub always uses Dart
   packages as source; there is nothing to prebuild.
 - **The native library**, which is not compiled. When the app builds, cargokit downloads the prebuilt
-  library for each target from Symbolon's releases and checks its signature against the public key in
-  `rust/cargokit.yaml`. The download is chosen by a hash of `rust/` at the pinned commit, so it always
-  matches the Dart code next to it. Only if a library is missing or fails the check does cargokit
+  library for each target from the pinned version's release and checks its signature against the
+  public key in `rust/cargokit.yaml`. The download is chosen by that version and a hash of `rust/`,
+  so it always matches the Dart code next to it. Only if a library is missing or fails the check does cargokit
   build it from source, which needs Rust (`rustup`).
 
 ```dart
@@ -79,10 +79,17 @@ changing `rust/src/api/`, regenerate the Dart side with `flutter_rust_bridge_cod
 
 ## Releases
 
-- **Prebuilt libraries:** every push to `main` builds the native library for Android, iOS, macOS,
-  Linux and Windows, signs each file, and uploads it to a release named `precompiled_<hash>`, where the
-  hash covers `rust/` (including `src/core_hash.rs`, which follows the core crate). The signing key is
-  the secret `CARGOKIT_PRIVATE_KEY` of the `release` environment, which only `main` can use. It is made
-  once with `../tool/new_signing_key.sh` and is only needed to publish, never to build.
-- **Web binding:** every `v*` tag attaches `symbolon-web-<tag>.tar.gz` and its SHA-256 to that tag's
-  release.
+To release, bump `version` in `pubspec.yaml` and in the three `Cargo.toml` files (CI checks they
+match), merge that to `main`, and push a signed tag `v<version>`. That tag starts one run of
+`.github/workflows/release.yaml`, which waits for one approval of the `release` environment and then
+publishes both:
+
+- **Web binding:** `symbolon-web-<tag>.tar.gz` and its SHA-256, in the release named after the tag.
+- **Prebuilt libraries:** the native library for Android, iOS, macOS, Linux and Windows, each file
+  signed, in the release `precompiled-v<version>_<hash>`. The hash covers `rust/` (including
+  `src/core_hash.rs`, which follows the core crate). The signing key is the secret
+  `CARGOKIT_PRIVATE_KEY` of the `release` environment. It is made once with
+  `../tool/new_signing_key.sh` and is only needed to publish, never to build.
+
+The run refuses a tag that doesn't match the version. Releases are immutable once published, so a
+mistake is fixed with a new version.

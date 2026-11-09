@@ -11,6 +11,7 @@ import 'cargo.dart';
 import 'crate_hash.dart';
 import 'options.dart';
 import 'precompile_binaries.dart';
+import 'release_tag.dart';
 import 'target.dart';
 
 class VerifyBinaries {
@@ -42,7 +43,8 @@ class VerifyBinaries {
           remote: true,
         );
 
-        final prefix = precompiledBinaries.uriPrefix;
+        final prefix = precompiledBinaries.uriPrefix +
+            precompiledTag(manifestDir, crateHash);
 
         bool ok = true;
 
@@ -51,9 +53,8 @@ class VerifyBinaries {
           final signatureFileName =
               PrecompileBinaries.signatureFileName(target, artifact);
 
-          final url = Uri.parse('$prefix$crateHash/$fileName');
-          final signatureUrl =
-              Uri.parse('$prefix$crateHash/$signatureFileName');
+          final url = Uri.parse('$prefix/$fileName');
+          final signatureUrl = Uri.parse('$prefix/$signatureFileName');
 
           final signature = await get(signatureUrl);
           if (signature.statusCode != 200) {

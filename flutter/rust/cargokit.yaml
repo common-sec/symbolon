@@ -1,6 +1,10 @@
 # Apps download prebuilt libraries from Symbolon's releases and check them with this key. A library
-# that is missing or fails the check is built from source instead. Releases are immutable once
-# published, so the release workflow uploads to a draft and publishes it when every library is there.
+# that is missing or fails the check is built from source instead.
+#
+# Each version tag publishes its libraries in the release precompiled-v<version>_<crate hash>, with
+# the version from flutter/pubspec.yaml (see build_tool/lib/src/release_tag.dart); cargokit appends
+# that tag to url_prefix. Releases are immutable once published, so the release workflow uploads to
+# a draft and publishes it when every library is there.
 precompiled_binaries:
-  url_prefix: https://github.com/common-sec/symbolon/releases/download/precompiled_
+  url_prefix: https://github.com/common-sec/symbolon/releases/download/
   public_key: b9faa021f61ecdf53ad4ba246605862eac6b1d5aa12178cc1880ae57681ac0e8

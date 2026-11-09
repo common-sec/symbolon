@@ -1,7 +1,7 @@
 name: symbolon_flutter
 description: "Symbolon for Dart and Flutter: native code through flutter_rust_bridge, and the JavaScript binding on the web."
 publish_to: none
-version: 0.1.0
+version: 0.3.0
 repository: https://github.com/common-sec/symbolon
 
 environment:

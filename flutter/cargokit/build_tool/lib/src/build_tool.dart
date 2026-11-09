@@ -17,6 +17,7 @@ import 'crate_hash.dart';
 import 'logging.dart';
 import 'options.dart';
 import 'precompile_binaries.dart';
+import 'release_tag.dart';
 import 'target.dart';
 import 'util.dart';
 import 'verify_binaries.dart';
@@ -237,10 +238,10 @@ class VerifyBinariesCommand extends Command {
   }
 }
 
-// Symbolon: prints the crate hash that names the precompiled_<hash> release, so the release
-// workflow can create that release as a draft before the build jobs upload to it.
-class CrateHashCommand extends Command {
-  CrateHashCommand() {
+// Symbolon: prints the release that holds the precompiled libraries, so the release workflow can
+// create it as a draft before the build jobs upload to it.
+class PrecompiledTagCommand extends Command {
+  PrecompiledTagCommand() {
     argParser.addOption(
       'manifest-dir',
       mandatory: true,
@@ -249,14 +250,15 @@ class CrateHashCommand extends Command {
   }
 
   @override
-  final name = "crate-hash";
+  final name = "precompiled-tag";
 
   @override
-  final description = 'Prints the crate hash used to name precompiled binaries.';
+  final description = 'Prints the release tag of the precompiled binaries.';
 
   @override
   Future<void> run() async {
-    stdout.writeln(CrateHash.compute(argResults!['manifest-dir'] as String));
+    final manifestDir = argResults!['manifest-dir'] as String;
+    stdout.writeln(precompiledTag(manifestDir, CrateHash.compute(manifestDir)));
   }
 }
 
@@ -276,7 +278,7 @@ Future<void> runMain(List<String> args) async {
       ..addCommand(GenKeyCommand())
       ..addCommand(PrecompileBinariesCommand())
       ..addCommand(VerifyBinariesCommand())
-      ..addCommand(CrateHashCommand());
+      ..addCommand(PrecompiledTagCommand());
 
     await runner.run(args);
   } on ArgumentError catch (e) {
