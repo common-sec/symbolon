@@ -137,4 +137,4 @@ node --test wasm/tests/binding.test.mjs
 
 ## License
 
-Not chosen yet.
+Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
